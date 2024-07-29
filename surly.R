@@ -1,6 +1,8 @@
 library(glue)
 library(rvest)
 library(tidyverse)
+library(httr)
+library(jsonlite)
 
 url_bikes <- "https://www.surlybikes.com/bikes/"
 bike_names <- read_html(url_bikes) |> html_elements(".title") |> html_text()
@@ -39,7 +41,7 @@ rm(i,item,tmp.web_page,tmp.elements)
 # 4 categories => 16 Bikes => 4 subtitles => info 
 
 items |> list_flatten() |> map_dbl(length) |> sum()
-# total of 603 items
+# total of 606 items
 headers <- vector("list", length(bike_link))
 descriptions <- vector("list", length(bike_link))
 for(i in 1:length(bike_names)){
@@ -127,6 +129,7 @@ scores_wide <- scores_wide |> mutate(mean_score = rowMeans(scores_wide[,2:length
 rm(score, score_category, scores,cat,cate)
 
 # MODIFYING TABLE ####
+
 # Storing long and wider version of data, along with original data shape
 surly_bikes_w <- surly_bikes |> left_join(scores_wide) 
 surly_bikes_l <- surly_bikes_w |> pivot_longer(cols = where(is.numeric),names_to = "score_category",values_to = "score",values_drop_na = T)
@@ -252,7 +255,7 @@ review_json2 <- map(review_raw2, \(x2) httr::GET(x2) |> httr::content(as = "pars
 
 # create a function for a specific bike, get all the comment data, store as a list and then do unnest if ncesesery
 
-bike_comment <- function(bike){
+bike_comment <-  function(bike){
   # bike is index. 1:16
   
   tmp.length <- review_list[[bike]][['results']] [[1]][["reviews"]] |> length()
@@ -263,31 +266,34 @@ bike_comment <- function(bike){
   avg_rating <- review_list[[bike]][['results']][[1]][[2]]$average_rating
   recommended_ratio <- review_list[[bike]][['results']][[1]][[2]]$recommended_ratio
   
-  name <- map_chr(1:tmp.length,\(l) review_list[[bike]][['results']][[1]][['reviews']][[l]][['details']]$nickname %>% if(is.null(.)) NA else .)
-  headline <- map_chr(1:tmp.length,\(l) review_list[[bike]][['results']][[1]][['reviews']][[l]][['details']]$headline %>% if(is.null(.)) NA else .)
-  content <- map_chr(1:tmp.length,\(l) review_list[[bike]][['results']][[1]][['reviews']][[l]][['details']]$comments %>% if(is.null(.)) NA else .)
-  bottom_line <- map_chr(1:tmp.length,\(l) review_list[[bike]][['results']][[1]][['reviews']][[l]][['details']]$bottom_line %>% if(is.null(.)) NA else .)
-  rating <- map_dbl(1:tmp.length,\(l)  review_list[[bike]][['results']] [[1]][["reviews"]][[l]][["metrics"]]$rating %>% if(is.null(.)) NA else .)
-  helpful <- map_dbl(1:tmp.length,\(l) review_list[[bike]][['results']] [[1]][["reviews"]][[l]][["metrics"]]$helpful_votes %>% if(is.null(.)) NA else .)
-  not_helpful <- map_dbl(1:tmp.length,\(l) review_list[[bike]][['results']] [[1]][["reviews"]][[l]][["metrics"]]$not_helpful_votes %>% if(is.null(.)) NA else .)
-  helpful_score <- map_dbl(1:tmp.length,\(l) review_list[[bike]][['results']] [[1]][["reviews"]][[l]][["metrics"]]$helpful_score %>% if(is.null(.)) NA else .)
-  location <- map_chr(1:tmp.length,\(l) review_list[[bike]][['results']] [[1]][["reviews"]][[l]][["details"]]$location %>% if(is.null(.)) NA else .)
-  full_date <- map_dbl(1:tmp.length,\(l) review_list[[bike]][['results']][[1]][['reviews']][[l]][['details']]$created_date/1000) |> as.POSIXct(origin = "1970-01-01") |> strptime(format = "%Y-%m-%d %H:%M:%S" %>% if(is.null(.)) NA else .)
-  hour <- map_chr(full_date,\(d) d |> str_split_i(" ",i=2) |> str_extract(".{5}") %>% if(is.null(.)) NA else .)
+  # store reviews to then use within loop
+  reviews <- review_list[[bike]][['results']][[1]][['reviews']]
+  
+  for(iterator_chr in c("nickname","headline","comments","bottom_line","location")){
+    parse(text = paste0(iterator_chr, " <- map_chr(1:tmp.length, \\(l) reviews[[l]][['details']]$",
+                        iterator_chr, " %>% if(is.null(.)) NA else .)")) |> eval()
+  }
+  
+  for(iterator_dbl in c("rating","helpful_votes","not_helpful_votes","helpful_score")){
+    parse(text = paste0(iterator_dbl, " <- map_dbl(1:tmp.length, \\(l) reviews[[l]][['metrics']]$",
+                        iterator_dbl, " %>% if(is.null(.)) NA else .)")) |> eval()
+  }
+  full_date <- map_dbl(1:tmp.length,\(l) xx_exp[[l]][['details']]$created_date/1000) |> as.POSIXct(origin = "1970-01-01") |> strptime(format = "%Y-%m-%d %H:%M:%S" %>% if(is.null(.)) NA else .)
   date <- full_date |> as.Date() 
+  hour <- map_chr(full_date,\(d) d |> str_split_i(" ",i=2) |> str_extract(".{5}") %>% if(is.null(.)) NA else .)
   
   comment_df <- tibble(
     bike = bike_names[bike],
     scores_dist_1..5 = scores_dist_1..5,
     avg_rating = avg_rating,
     recommended_ratio = recommended_ratio,
-    name = name,
+    name = nickname,
     headline = headline,
-    content = content,
+    content = comments,
     bottom_line = bottom_line,
     rating = rating,
-    helpful = helpful,
-    not_helpful = not_helpful,
+    helpful = helpful_votes,
+    not_helpful = not_helpful_votes,
     helpful_score = helpful_score,
     location = location,
     full_date = full_date,
