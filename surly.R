@@ -278,7 +278,7 @@ bike_comment <-  function(bike){
     parse(text = paste0(iterator_dbl, " <- map_dbl(1:tmp.length, \\(l) reviews[[l]][['metrics']]$",
                         iterator_dbl, " %>% if(is.null(.)) NA else .)")) |> eval()
   }
-  full_date <- map_dbl(1:tmp.length,\(l) xx_exp[[l]][['details']]$created_date/1000) |> as.POSIXct(origin = "1970-01-01") |> strptime(format = "%Y-%m-%d %H:%M:%S" %>% if(is.null(.)) NA else .)
+  full_date <- map_dbl(1:tmp.length,\(l) reviews[[l]][['details']]$created_date/1000) |> as.POSIXct(origin = "1970-01-01") |> strptime(format = "%Y-%m-%d %H:%M:%S" %>% if(is.null(.)) NA else .)
   date <- full_date |> as.Date() 
   hour <- map_chr(full_date,\(d) d |> str_split_i(" ",i=2) |> str_extract(".{5}") %>% if(is.null(.)) NA else .)
   
@@ -312,29 +312,32 @@ bike_comment2 <- function(bike_2pages){
   tmp.length <- review_list2[[bike_2pages]][['results']] [[1]][["reviews"]] |> length()
   if(tmp.length == 0) return(NULL)
   
+  # store reviews2 to then use within loop
+  reviews2 <- review_list2[[bike_2pages]][['results']][[1]][['reviews']]
   
-  name <- map_chr(1:tmp.length,\(l) review_list2[[bike_2pages]][['results']][[1]][['reviews']][[l]][['details']]$nickname %>% if(is.null(.)) NA else .)
-  headline <- map_chr(1:tmp.length,\(l) review_list2[[bike_2pages]][['results']][[1]][['reviews']][[l]][['details']]$headline %>% if(is.null(.)) NA else .)
-  content <- map_chr(1:tmp.length,\(l) review_list2[[bike_2pages]][['results']][[1]][['reviews']][[l]][['details']]$comments %>% if(is.null(.)) NA else .)
-  bottom_line <- map_chr(1:tmp.length,\(l) review_list2[[bike_2pages]][['results']][[1]][['reviews']][[l]][['details']]$bottom_line %>% if(is.null(.)) NA else .)
-  rating <- map_dbl(1:tmp.length,\(l)  review_list2[[bike_2pages]][['results']] [[1]][["reviews"]][[l]][["metrics"]]$rating %>% if(is.null(.)) NA else .)
-  helpful <- map_dbl(1:tmp.length,\(l) review_list2[[bike_2pages]][['results']] [[1]][["reviews"]][[l]][["metrics"]]$helpful_votes %>% if(is.null(.)) NA else .)
-  not_helpful <- map_dbl(1:tmp.length,\(l) review_list2[[bike_2pages]][['results']] [[1]][["reviews"]][[l]][["metrics"]]$not_helpful_votes %>% if(is.null(.)) NA else .)
-  helpful_score <- map_dbl(1:tmp.length,\(l) review_list2[[bike_2pages]][['results']] [[1]][["reviews"]][[l]][["metrics"]]$helpful_score %>% if(is.null(.)) NA else .)
-  location <- map_chr(1:tmp.length,\(l) review_list2[[bike_2pages]][['results']] [[1]][["reviews"]][[l]][["details"]]$location %>% if(is.null(.)) NA else .)
-  full_date <- map_dbl(1:tmp.length,\(l) review_list2[[bike_2pages]][['results']][[1]][['reviews']][[l]][['details']]$created_date/1000) |> as.POSIXct(origin = "1970-01-01") |> strptime(format = "%Y-%m-%d %H:%M:%S" %>% if(is.null(.)) NA else .)
-  hour <- map_chr(full_date,\(d) d |> str_split_i(" ",i=2) |> str_extract(".{5}") %>% if(is.null(.)) NA else .)
+  for(iterator_chr in c("nickname","headline","comments","bottom_line","location")){
+    parse(text = paste0(iterator_chr, " <- map_chr(1:tmp.length, \\(l) reviews2[[l]][['details']]$",
+                        iterator_chr, " %>% if(is.null(.)) NA else .)")) |> eval()
+  }
+  
+  for(iterator_dbl in c("rating","helpful_votes","not_helpful_votes","helpful_score")){
+    parse(text = paste0(iterator_dbl, " <- map_dbl(1:tmp.length, \\(l) reviews2[[l]][['metrics']]$",
+                        iterator_dbl, " %>% if(is.null(.)) NA else .)")) |> eval()
+  }
+  
+  full_date <- map_dbl(1:tmp.length,\(l) review_list2[[l]][['details']]$created_date/1000) |> as.POSIXct(origin = "1970-01-01") |> strptime(format = "%Y-%m-%d %H:%M:%S" %>% if(is.null(.)) NA else .)
   date <- full_date |> as.Date() 
+  hour <- map_chr(full_date,\(d) d |> str_split_i(" ",i=2) |> str_extract(".{5}") %>% if(is.null(.)) NA else .)
   
   comment_df2 <- tibble(
     bike = bike_names[bike_names |> str_replace_all(" ","_") |> str_to_lower() == bike_names_only_2pages[bike_2pages]], # ugly code that takes only ones with 2 pages
-    name = name,
+    name = nickname,
     headline = headline,
-    content = content,
+    content = comments,
     bottom_line = bottom_line,
     rating = rating,
-    helpful = helpful,
-    not_helpful = not_helpful,
+    helpful = helpful_votes,
+    not_helpful = not_helpful_votes,
     helpful_score = helpful_score,
     location = location,
     full_date = full_date,
