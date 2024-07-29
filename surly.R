@@ -10,8 +10,8 @@ bike_names <- read_html(url_bikes) |> html_elements(".title") |> html_text()
 bike_link <- paste0(url_bikes,bike_names) |> str_replace_all(" ","_")
 
 sections <- map_chr(1:4,\(titl) bike_link[8] |> read_html() |> html_element(glue(".spec-grid-block:nth-child({titl})")) |> html_text2() |>
-                    str_extract("(.*)\\n") |> str_remove("\n")) 
-                  # ok to leave at bike_link[8]. It's just for titles that are constant across all bikes [16]
+                      str_extract("(.*)\\n") |> str_remove("\n")) 
+# ok to leave at bike_link[8]. It's just for titles that are constant across all bikes [16]
 
 # Bike categories
 bike_categories <- map(bike_link, \(link) link |> read_html() |> html_elements("a+ a") |> html_text2() |> str_remove("Find Your Bike") |> str_squish())
@@ -63,7 +63,7 @@ bcol <- vector("list", length(bike_names))
 for(i in 1:length(bike_names)){
   
   for(b in 1:3){ # 3 because i manually checked and saw that max is three kinds of bikes
-
+    
     
     if(!is_empty(bike_colors[[i]][[b]])){
       bcol[[i]][[b]] <- bike_colors[[i]][[b]]
@@ -218,11 +218,11 @@ surly_scores_w <- surly_bikes_w |> select(category,bike,mean_score:hauling) |> d
 # STORE ALL TABLES ####
 my_surly_tables <- 
   tibble(
-  x = c('general','long','wide'),
-  general = list(surly_bikes,surly_bikes_l,surly_bikes_w),
-  scores = list(tibble(),surly_scores_l,surly_scores_w),
-  price = list(tibble(),surly_prices_l,surly_prices_w)
-)
+    x = c('general','long','wide'),
+    general = list(surly_bikes,surly_bikes_l,surly_bikes_w),
+    scores = list(tibble(),surly_scores_l,surly_scores_w),
+    price = list(tibble(),surly_prices_l,surly_prices_w)
+  )
 my_surly_tables |> write_rds("surly_tables.rds");paste('\nSaved surly tables @',now()) |> cat()
 
 # Get reviews
@@ -349,7 +349,7 @@ bike_commetns2 <- map_dfr(1:length(bike_names_only_2pages),bike_comment2)
 
 bike_comments_all <- bind_rows(bike_commetns,bike_commetns2) |> 
   left_join(reviews_meta |> select(bike,n_reviews)) |> relocate(n_reviews,.after = bike)
- 
+
 bike_comments_all <- # fix meta comments: distribution of ratings, avg rating, recommended ratio
   bike_comments_all |> 
   mutate(scores_dist_1..5 = paste(unique(scores_dist_1..5),collapse = "") |> str_remove("NA"),
