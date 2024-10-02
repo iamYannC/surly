@@ -58,7 +58,11 @@ length(unlist(headers)) == length(unlist(descriptions));length(unlist(headers))
 n_elements_each_section <- map(1:length(headers),\(x) map_dbl(headers[[x]],length)) |> unlist()
 
 # use bcol and multiply_bike
-bike_colors <- map(bike_link, \(link) map(6:8, \(n) link |> read_html() |> html_elements("#builds-kit .tablist") |> html_elements(glue("#tab{n}")) |> html_text2()),.progress = T)
+bike_colors <- map(bike_link, \(link) map(6:8, \(n) link |> read_html() |>
+                                            html_elements("#builds-kit .tablist") |>
+                                            html_elements(glue("#tab{n}")) |>
+                                            html_text2()),
+                   .progress = T)
 
 bcol <- vector("list", length(bike_names)) 
 
@@ -103,7 +107,7 @@ surly_bikes <-
 # Adding scores 
 ratings <- map(bike_link,\(b) b |> read_html() |> html_elements(".bubble-chart-wrap") |> html_text2())
 ratings_clean <- 
-  map(ratings, \(b) b |> str_extract(".*(?=\\sout)") |> 
+  map(ratings, \(rate) rate |> str_extract(".*(?=\\sout)") |> 
         str_remove_all("\t")
   )
 
@@ -243,8 +247,7 @@ reviews_meta <- tibble(bike = bike_names,
   mutate(start_at_2nd = ifelse(n_reviews > 25,24+1,NA)) # 0 indexed
 
 
-# due to design, I'll recreate review_raw, as well as the derrived review_list, only this time, the &paging.from would be 25, since zero indexed 0 to 24, then 25 to end
-
+# due to design, &paging.from is be 25, since zero indexed 0 to 24, then 25 to end
 
 # Get review list for page 2:
 bike_names_only_2pages <- bike_names |> str_replace_all(" ","_") |> str_to_lower() %>% .[bike_names %in% (reviews_meta |> drop_na(start_at_2nd) |> pull(bike))]
@@ -307,15 +310,14 @@ bike_comment <-  function(bike){
 }
 
 bike_commetns <- map_dfr(1:length(bike_names),bike_comment)
-
 bike_comment2 <- function(bike_2pages){
   # bike_2pages is index. 1:4
   
-  tmp.length <- review_list2[[bike_2pages]][['results']] [[1]][["reviews"]] |> length()
-  if(tmp.length == 0) return(NULL)
-  
   # store reviews2 to then use within loop
   reviews2 <- review_list2[[bike_2pages]][['results']][[1]][['reviews']]
+  
+  tmp.length <- length(reviews2)
+  if(tmp.length == 0) return(NULL)
   
   for(iterator_chr in c("nickname","headline","comments","bottom_line","location")){
     parse(text = paste0(iterator_chr, " <- map_chr(1:tmp.length, \\(l) reviews2[[l]][['details']]$",
@@ -327,7 +329,10 @@ bike_comment2 <- function(bike_2pages){
                         iterator_dbl, " %>% if(is.null(.)) NA else .)")) |> eval()
   }
   
-  full_date <- map_dbl(1:tmp.length,\(l) review_list2[[l]][['details']]$created_date/1000) |> as.POSIXct(origin = "1970-01-01") |> strptime(format = "%Y-%m-%d %H:%M:%S" %>% if(is.null(.)) NA else .)
+  full_date <- map_dbl(1:tmp.length,\(l) (review_list2[[bike_2pages]]$results[[1]]$reviews[[l]]$details$created_date/1000)) |>
+    as.POSIXct(origin = "1970-01-01", tz = 'UTC') |>
+    strptime(format = "%Y-%m-%d %H:%M:%S" %>% if(is.null(.)) NA else .)
+  
   date <- full_date |> as.Date() 
   hour <- map_chr(full_date,\(d) d |> str_split_i(" ",i=2) |> str_extract(".{5}") %>% if(is.null(.)) NA else .)
   
@@ -349,8 +354,8 @@ bike_comment2 <- function(bike_2pages){
   
   return(comment_df2)
 }
-
 bike_commetns2 <- map_dfr(1:length(bike_names_only_2pages),bike_comment2)
+
 
 bike_comments_all <- bind_rows(bike_commetns,bike_commetns2) |> 
   left_join(reviews_meta |> select(bike,n_reviews)) |> relocate(n_reviews,.after = bike)
