@@ -6,10 +6,10 @@ library(jsonlite)
 
 url_bikes <- "https://www.surlybikes.com/bikes/"
 bike_names <- read_html(url_bikes) |> html_elements(".title") |> html_text()
+bike_names[8] <- paste0(bike_names[8],"-v2")
 
 bike_link <- paste0(url_bikes,bike_names) |> str_replace_all(" ","_")
 
-bike_link[8] <- paste0(bike_link[8],'-v2') # they changed the url
 
 sections <- map_chr(1:4,\(titl) bike_link[1] |> read_html() |> html_element(glue(".spec-grid-block:nth-child({titl})")) |> html_text2() |>
                       str_extract("(.*)\\n") |> str_remove("\n")) 
@@ -402,12 +402,8 @@ qa_to_pages <- function(n_qa){
 }
 tibble(bike_names,total_qa, pages = map_dbl(total_qa,qa_to_pages))
 
-# create a function that iterates and returns a tibble. in the function take argument to then make it iterate over different bikes. 
-# but the function should just iterate over pages
-# it will merely be gathering of the data, and only after analysing.
-
 qa_collector <- function(bike_id){
-  cat("\nbike: ",bike_names[bike_id],"\n")
+  cat("\nbike: ",bike_names[bike_id],"(",bike_id,")\n")
   
   # This function returns a list of all QA for a specific bike.
   # It iterates over all pages (given 25 page size) and extracts the details & answer section from each QA
@@ -448,6 +444,8 @@ list_QA <- map(1:length(bike_names),qa_collector)
 
 
 qa_generator <- function(bike_id){
+  
+  cat("\nbike: ",bike_names[bike_id],"(",bike_id,")\n")
   
   n_elements <- list_QA[[bike_id]] |> length()
   tmp_df <- tibble(bike = rep(bike_names[bike_id],n_elements),
@@ -496,9 +494,19 @@ qa_generator <- function(bike_id){
   return(tmp_df |> separate_longer_delim(cols = contains("a_"),delim = " || "))
 }
 
-answers <- map_dfr(1:length(bike_names), qa_generator) |> janitor::remove_empty()
+answers <- map(1:length(bike_names), qa_generator)
+
+for(i in 1:length(answers)){
+  if(
+    nrow(answers[[i]]) == 0
+  ) {
+    answers[[i]] <- NULL
+  }
+}
+
 answers <- 
-  answers |> mutate(across(contains("created"),\(ts) (as.numeric(ts)/1e3) |> as.POSIXct())) |> 
+  bind_rows(answers) |> janitor::remove_empty() |> 
+  mutate(across(contains("created"),\(ts) (as.numeric(ts)/1e3) |> as.POSIXct())) |> 
   mutate(q_date = as.Date(q_created_date),
          q_hour = format(q_created_date,format = "%H:%M"),
          a_date = as.Date(a_created_date),
@@ -510,15 +518,18 @@ answers <-
 
 # GEOMETRIES
 # Getting geometry is a pain in the ass.
-# this code should work. TODO: since rows are the same, add them only after conbining or whatever. dont calculkate each time.
+# this code should work. TODO: since rows are the same, add them only after combining or whatever. dont calculate each time.
 # its also very slow code
 get_geometry <- function(bike_id){
+  
   cat("\nbike: ",bike_names[bike_id],"\n")
-  types <- read_html(bike_link[bike_id]) |> html_elements("#geometry-wrap .tab") |> html_text2()
-  cols <- read_html(bike_link[bike_id]) |> html_elements("thead th") |> html_text2()
+  html <- read_html(bike_link[bike_id])
+  
+  types <- html |> html_elements("#geometry-wrap .tab") |> html_text2()
+  cols <- html |> html_elements("thead th") |> html_text2()
   cols <- cols[cols!='SIZE']
-  if(!'rows' %in% ls()) rows <<- read_html(bike_link[bike_id]) |> html_elements("tbody th") |> html_text2() # rows should only computed once
-  cells <- read_html(bike_link[bike_id]) |> html_elements("tbody td") |> html_text2()
+  if(!'rows' %in% ls()) rows <<- html |> html_elements("tbody th") |> html_text2() # rows should only computed once
+  cells <- html |> html_elements("tbody td") |> html_text2()
   
   if(length(types) == 0) types <- 1
   
@@ -538,7 +549,7 @@ get_geometry <- function(bike_id){
       if(idx_to_capture == length(ns)) break
     }
     
-    end_idx <- idx_to_capture * length(unique(rows)) # setting end index as multipcation of number of rows and number of columns to capture in first table
+    end_idx <- idx_to_capture * length(unique(rows)) # setting end index as multiplication of number of rows and number of columns to capture in first table
     n_cols <- idx_to_capture
     end_colname_idx <- idx_to_capture
   }
