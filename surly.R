@@ -9,14 +9,16 @@ bike_names <- read_html(url_bikes) |> html_elements(".title") |> html_text()
 
 bike_link <- paste0(url_bikes,bike_names) |> str_replace_all(" ","_")
 
-sections <- map_chr(1:4,\(titl) bike_link[8] |> read_html() |> html_element(glue(".spec-grid-block:nth-child({titl})")) |> html_text2() |>
+bike_link[8] <- paste0(bike_link[8],'-v2') # they changed the url
+
+sections <- map_chr(1:4,\(titl) bike_link[1] |> read_html() |> html_element(glue(".spec-grid-block:nth-child({titl})")) |> html_text2() |>
                       str_extract("(.*)\\n") |> str_remove("\n")) 
-# ok to leave at bike_link[8]. It's just for titles that are constant across all bikes [16]
+# ok to leave at bike_link[1]. It's just for titles that are constant across all bikes [16]
 
 # Bike categories
 bike_categories <- map(bike_link, \(link) link |> read_html() |> html_elements("a+ a") |> html_text2() |> str_remove("Find Your Bike") |> str_squish())
 bike_categories <-
-  bike_categories |> map(\(x) str_extract(x,"\\w+")) |> unlist() %>%.[!is.na(.)] |>
+  bike_categories |> map(\(x) str_extract(unlist(x),"\\w+") %>%.[!is.na(.)]) |> unlist() |> 
   bind_cols(bike_names) |> set_names(c("category","bike"))
 
 
@@ -41,7 +43,7 @@ rm(i,item,tmp.web_page,tmp.elements)
 # 4 categories => 16 Bikes => 4 subtitles => info 
 
 items |> list_flatten() |> map_dbl(length) |> sum()
-# total of 606 items
+# total of 652 items
 headers <- vector("list", length(bike_link))
 descriptions <- vector("list", length(bike_link))
 for(i in 1:length(bike_names)){
